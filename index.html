@@ -1,0 +1,320 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Reader with Audio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to right, #e66465, #9198e5);
+            color: #fff;
+            transition: background 0.3s;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        .book {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #fff;
+            border-radius: 5px;
+            transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden; /* Added to contain the image */
+        }
+
+        .book:hover {
+            transform: scale(1.05);
+            background-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.6); /* Glowing effect */
+        }
+
+        .book img {
+            width: 100%; /* Make image responsive */
+            height: auto; /* Maintain aspect ratio */
+            border-radius: 5px; /* Match the book card border radius */
+        }
+
+        .button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .reader-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .reader-content {
+            background: #222;
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: red;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #remaining-time {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #ccc;
+        }
+
+        footer {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 0.8em;
+        }
+
+        footer a {
+            color: #fff;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        footer a:hover {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Book Reader</h1>
+        <input type="text" id="search" placeholder="Search books..." onkeyup="filterBooks()">
+        <div id="genre-select-container">
+            <select id="genre-select" onchange="filterBooks()">
+                <option value="all">All Genres</option>
+                <option value="fiction">Fiction</option>
+                <option value="fantasy">Fantasy</option>
+                <option value="non-fiction">Non-Fiction</option>
+            </select>
+        </div>
+        <div id="book-list"></div>
+
+        <!-- Reader Modal -->
+        <div class="reader-modal" id="readerModal">
+            <div class="reader-content">
+                <button class="close-button" onclick="closeReader()">X</button>
+                <h2 id="book-title"></h2>
+                <div id="book-page"></div>
+                <button class="button" onclick="prevPage()">Previous Page</button>
+                <button class="button" onclick="nextPage()">Next Page</button>
+                <div id="remaining-time"></div>
+                <div id="audio-controls">
+                    <button class="button" id="play-pause-button" onclick="toggleSpeech()">🎧</button>
+                    <button class="button" id="auto-flip-button" onclick="toggleAutoFlip()">Auto Flip: Off</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <footer>
+        <p>Join our <a href="https://discord.gg/your-discord-link" target="_blank">Discord</a> to publish your stories!</p>
+        <p>Contribute to our <a href="https://github.com/your-github-repo" target="_blank">GitHub</a>!</p>
+    </footer>
+
+    <script>
+        const books = [
+            {
+                title: "Book One",
+                genre: "fiction",
+                story: "Once upon a time in a faraway land, a brave knight embarked on a quest to find a hidden treasure. The journey was filled with challenges, but he was determined to succeed...",
+                imageUrl: "https://example.com/book1.jpg" // Add your image URL here
+            },
+            {
+                title: "Book Two",
+                genre: "fantasy",
+                story: "In a world where magic is real, young wizards train to harness their powers. This is the story of a gifted student who must confront the dark forces threatening his home...",
+                imageUrl: "https://example.com/book2.jpg" // Add your image URL here
+            },
+            {
+                title: "Book Three",
+                genre: "non-fiction",
+                story: "The history of the world is fascinating, filled with great discoveries and human achievements. This book explores pivotal moments that shaped our civilization...",
+                imageUrl: "https://example.com/book3.jpg" // Add your image URL here
+            }
+        ];
+
+        let currentBook = null;
+        let currentPage = 0;
+        let speechSynthesis = window.speechSynthesis;
+        let isSpeaking = false;
+        let speechUtterance = null;
+        let totalPages = 0;
+        let autoFlip = false;
+        let autoFlipInterval;
+
+        // Display Books
+        function displayBooks(books) {
+            const bookList = document.getElementById('book-list');
+            bookList.innerHTML = '';
+            books.forEach(book => {
+                const bookDiv = document.createElement('div');
+                bookDiv.className = 'book';
+                bookDiv.innerHTML = `
+                    <img src="${book.imageUrl}" alt="${book.title}">
+                    <h3>${book.title}</h3>
+                    <p>Genre: ${book.genre}</p>
+                    <button class="button" onclick="openReader(${books.indexOf(book)})">Read</button>
+                `;
+                bookList.appendChild(bookDiv);
+            });
+        }
+
+        // Filter Books
+        function filterBooks() {
+            const searchTerm = document.getElementById('search').value.toLowerCase();
+            const selectedGenre = document.getElementById('genre-select').value;
+            const filteredBooks = books.filter(book => {
+                const matchesTitle = book.title.toLowerCase().includes(searchTerm);
+                const matchesGenre = selectedGenre === 'all' || book.genre === selectedGenre;
+                return matchesTitle && matchesGenre;
+            });
+            displayBooks(filteredBooks);
+        }
+
+        // Open Reader
+        function openReader(index) {
+            currentBook = books[index];
+            currentPage = 0;
+            document.getElementById('book-title').innerText = currentBook.title;
+            paginateStory();
+            document.getElementById('readerModal').style.display = 'flex';
+        }
+
+        // Close Reader
+        function closeReader() {
+            document.getElementById('readerModal').style.display = 'none';
+            stopSpeech();
+        }
+
+        // Pagination
+        function paginateStory() {
+            const words = currentBook.story.split(' ');
+            totalPages = Math.ceil(words.length / 200);
+            const startIndex = currentPage * 200;
+            const endIndex = Math.min(startIndex + 200, words.length);
+            const pageContent = words.slice(startIndex, endIndex).join(' ');
+            document.getElementById('book-page').innerText = pageContent;
+            document.getElementById('remaining-time').innerText = `Page ${currentPage + 1} of ${totalPages}`;
+            if (autoFlip) {
+                startAutoFlip();
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                paginateStory();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+                paginateStory();
+            }
+        }
+
+        // Speech Synthesis
+        function toggleSpeech() {
+            if (!isSpeaking) {
+                startSpeech();
+            } else {
+                stopSpeech();
+            }
+        }
+
+        function startSpeech() {
+            if (speechSynthesis.speaking) return;
+            speechUtterance = new SpeechSynthesisUtterance(currentBook.story);
+            speechSynthesis.speak(speechUtterance);
+            isSpeaking = true;
+            document.getElementById('play-pause-button').innerText = '⏸️';
+            speechUtterance.onend = function () {
+                isSpeaking = false;
+                document.getElementById('play-pause-button').innerText = '🎧';
+            };
+        }
+
+        function stopSpeech() {
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+                isSpeaking = false;
+                document.getElementById('play-pause-button').innerText = '🎧';
+            }
+        }
+
+        function toggleAutoFlip() {
+            autoFlip = !autoFlip;
+            document.getElementById('auto-flip-button').innerText = autoFlip ? 'Auto Flip: On' : 'Auto Flip: Off';
+            if (autoFlip) {
+                startAutoFlip();
+            } else {
+                clearInterval(autoFlipInterval);
+            }
+        }
+
+        function startAutoFlip() {
+            autoFlipInterval = setInterval(() => {
+                if (currentPage < totalPages - 1) {
+                    nextPage();
+                } else {
+                    toggleAutoFlip(); // Stop auto flip if at the last page
+                }
+            }, 5000); // Change page every 5 seconds
+        }
+
+        // Initial Display
+        displayBooks(books);
+    </script>
+</body>
+</html>
